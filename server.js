@@ -343,6 +343,7 @@ app.get('/api/docs', (req, res) => {
         description: 'API for app fingerprint management and verification',
         endpoints: {
             'POST /api/fingerprints': 'Upload app fingerprint',
+            'POST /api/fingerprints/generate': 'Generate fingerprint from APK/IPA file',
             'GET /api/fingerprints/verify': 'Verify app fingerprint',
             'GET /api/fingerprints/scan': 'Scan app for credibility',
             'POST /api/developers/register': 'Register new developer',
