@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const multer = require('multer');
 const compression = require('compression');
 const winston = require('winston');
+const AdmZip = require('adm-zip');
 
 // Initialize Express app
 const app = express();
@@ -90,6 +91,125 @@ const upload = multer({
         }
     }
 });
+
+async function generateFingerprintFromBuffer(fileBuffer, appInfo) {
+    // const AdmZip = require('adm-zip');
+    
+    const fingerprints = {};
+    const metadata = {
+        fileSize: fileBuffer.length,
+        analysisTimestamp: new Date().toISOString(),
+        fileType: appInfo.fileType
+    };
+
+    try {
+        const zip = new AdmZip(fileBuffer);
+        const entries = zip.getEntries();
+        
+        if (appInfo.fileType === 'apk') {
+            fingerprints.apk = {
+                manifest: null,
+                classes: {},
+                resources: {},
+                assets: {},
+                libs: {}
+            };
+
+            for (const entry of entries) {
+                const entryName = entry.entryName;
+                const content = entry.getData();
+                const contentHash = hashContent(content);
+
+                if (entryName === 'AndroidManifest.xml') {
+                    fingerprints.apk.manifest = {
+                        hash: contentHash,
+                        size: content.length
+                    };
+                } else if (entryName.startsWith('classes') && entryName.endsWith('.dex')) {
+                    fingerprints.apk.classes[entryName] = {
+                        hash: contentHash,
+                        size: content.length
+                    };
+                } else if (entryName.startsWith('res/')) {
+                    fingerprints.apk.resources[entryName] = {
+                        hash: contentHash,
+                        size: content.length
+                    };
+                } else if (entryName.startsWith('assets/')) {
+                    fingerprints.apk.assets[entryName] = {
+                        hash: contentHash,
+                        size: content.length
+                    };
+                } else if (entryName.startsWith('lib/')) {
+                    fingerprints.apk.libs[entryName] = {
+                        hash: contentHash,
+                        size: content.length
+                    };
+                }
+            }
+        } else { // IPA
+            fingerprints.ipa = {
+                executable: null,
+                resources: {},
+                frameworks: {},
+                plists: {}
+            };
+
+            for (const entry of entries) {
+                const entryName = entry.entryName;
+                const content = entry.getData();
+                const contentHash = hashContent(content);
+
+                if (entryName.includes('.app/') && !entryName.includes('/')) {
+                    const fileName = entryName.split('/').pop();
+                    if (!fileName.includes('.')) {
+                        fingerprints.ipa.executable = {
+                            hash: contentHash,
+                            size: content.length,
+                            name: fileName
+                        };
+                    }
+                } else if (entryName.endsWith('.plist')) {
+                    fingerprints.ipa.plists[entryName] = {
+                        hash: contentHash,
+                        size: content.length
+                    };
+                } else if (entryName.includes('.framework/')) {
+                    fingerprints.ipa.frameworks[entryName] = {
+                        hash: contentHash,
+                        size: content.length
+                    };
+                } else if (entryName.includes('.app/')) {
+                    fingerprints.ipa.resources[entryName] = {
+                        hash: contentHash,
+                        size: content.length
+                    };
+                }
+            }
+        }
+
+        metadata.totalEntries = entries.length;
+        
+        // Generate overall hash
+        const overallHash = hashContent(JSON.stringify(fingerprints, Object.keys(fingerprints).sort()));
+
+        return {
+            appId: appInfo.appId,
+            appName: appInfo.appName,
+            packageName: appInfo.packageName,
+            version: appInfo.version,
+            fileType: appInfo.fileType,
+            fileName: appInfo.fileName,
+            overallHash,
+            fingerprints,
+            metadata
+        };
+
+    } catch (error) {
+        throw new Error(`Failed to analyze ${appInfo.fileType.toUpperCase()}: ${error.message}`);
+    }
+}
+
 
 // Utility functions
 function hashContent(content) {
@@ -703,6 +823,65 @@ async function performCredibilityAnalysis(appData) {
 
     return analysis;
 }
+
+// Generate fingerprint from uploaded file
+app.post('/api/fingerprints/generate', uploadLimiter, upload.single('appFile'), logApiUsage, async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                error: 'App file is required'
+            });
+        }
+
+        const { appId, appName, version, packageName } = req.body;
+        
+        if (!appId || !appName || !version) {
+            return res.status(400).json({
+                success: false,
+                error: 'appId, appName, and version are required'
+            });
+        }
+
+        // Validate file type
+        const allowedTypes = ['application/vnd.android.package-archive', 'application/octet-stream'];
+        const fileExt = req.file.originalname.toLowerCase().endsWith('.apk') ? '.apk' : 
+                       req.file.originalname.toLowerCase().endsWith('.ipa') ? '.ipa' : null;
+        
+        if (!fileExt || (!allowedTypes.includes(req.file.mimetype) && !req.file.originalname.match(/\.(apk|ipa)$/i))) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid file type. Only APK and IPA files are allowed.'
+            });
+        }
+
+        logger.info(`Generating fingerprint for ${fileExt} file: ${req.file.originalname}`);
+
+        // Generate fingerprint from file buffer
+        const fingerprint = await generateFingerprintFromBuffer(req.file.buffer, {
+            appId,
+            appName,
+            version,
+            packageName: packageName || appId,
+            fileName: req.file.originalname,
+            fileType: fileExt.substring(1)
+        });
+
+        res.json({
+            success: true,
+            fingerprint,
+            message: 'Fingerprint generated successfully'
+        });
+
+    } catch (error) {
+        logger.error('Error generating fingerprint:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to generate fingerprint'
+        });
+    }
+});
+
 
 // Error handling middleware
 app.use((error, req, res, next) => {
