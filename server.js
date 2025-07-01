@@ -11,6 +11,7 @@ const winston = require('winston');
 const AntiCloneSDK = require('anticlone-sdk');
 const fs = require('fs').promises;
 const path = require('path');
+const cors = require('cors');
 
 // Initialize Express app
 const app = express();
@@ -60,6 +61,12 @@ app.use(cors({
 app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+app.use(cors({
+  origin: '*', // Allow all origins for testing
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'x-developer-id', 'x-api-key']
+}));
 
 app.set('trust proxy', 1);
 // Rate limiting
