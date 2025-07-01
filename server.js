@@ -396,7 +396,7 @@ app.post('/api/fingerprints/generate', upload.single('file'), limiter, logApiUsa
 });
 
 // Verify fingerprint
-app.post('/api/fingerprints/verify', limiter, logApiUsage, async (req, res) => {
+app.post('/api/fingerprints/verify', logApiUsage, async (req, res) => {
     console.log('Verify request received:', req.body);
     console.log('Headers:', req.headers); 
     try {
