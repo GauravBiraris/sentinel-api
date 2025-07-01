@@ -11,7 +11,6 @@ const winston = require('winston');
 const AntiCloneSDK = require('anticlone-sdk');
 const fs = require('fs').promises;
 const path = require('path');
-const cors = require('cors');
 
 // Initialize Express app
 const app = express();
@@ -54,10 +53,10 @@ pool.on('error', (err) => {
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
-    credentials: true
-}));
+// app.use(cors({
+//     origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+//     credentials: true
+// }));
 app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
