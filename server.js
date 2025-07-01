@@ -276,7 +276,7 @@ app.post('/api/fingerprints', uploadLimiter, authenticateRequest, logApiUsage, a
             `INSERT INTO app_fingerprints 
              (developer_id, app_id, app_name, package_name, version, file_type, file_name,
               overall_hash, fingerprint_data, metadata)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $11)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING id`,
             [
                 req.developer.id,
