@@ -1,0 +1,1 @@
+It's the directory to process temporary fingerprint generation for /fingerprints/generate endpoint 
